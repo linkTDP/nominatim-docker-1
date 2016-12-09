@@ -19,7 +19,7 @@ If a different country should be used you can set `PBF_DATA` on build.
 1. Clone repository
 
   ```
-  # git clone git@github.com:cartography/nominatim-docker.git
+  # git clone https://github.com/linkTDP/nominatim-docker-1
   # cd nominatim-docker/2.5
   ```
 
@@ -28,11 +28,18 @@ If a different country should be used you can set `PBF_DATA` on build.
   ```
   ENV PBF_DATA http://download.geofabrik.de/europe/monaco-latest.osm.pbf
   ```
-3. Build 
+3. Build
 
   ```
   docker build -t nominatim .
   ```
+
+  if you need to use a proxy:
+
+  ```
+  docker build --build-arg PROXY=<your proxy> -t nominatim .
+  ```
+
 4. Run
 
   ```

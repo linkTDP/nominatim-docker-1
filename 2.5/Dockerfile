@@ -1,10 +1,18 @@
 FROM ubuntu:trusty
-MAINTAINER winsent <pipetc@gmail.com>
+
+ARG PROXY
+ENV http_proxy=$PROXY
+ENV https_proxy=$PROXY
+ENV HTTP_PROXY=$PROXY
+ENV HTTPS_PROXY=$PROXY
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV LANG C.UTF-8
 RUN locale-gen en_US.UTF-8
 RUN update-locale LANG=en_US.UTF-8
+
+
+ARG OSM_PBF_FILE=$OSM_PBF_FILE
 
 # Install packages http://wiki.openstreetmap.org/wiki/Nominatim/Installation#Ubuntu.2FDebian
 RUN apt-get -y update --fix-missing && \
@@ -25,12 +33,19 @@ WORKDIR /app
 RUN echo "host all  all    0.0.0.0/0  trust" >> /etc/postgresql/9.3/main/pg_hba.conf && \
     echo "listen_addresses='*'" >> /etc/postgresql/9.3/main/postgresql.conf
 
+RUN export HTTP_PROXY=http://UGA05249:KD7UQL85,@proxybo.servizi.gr-u.it:80
+RUN export HTTPS_PROXY=http://UGA05249:KD7UQL85,@proxybo.servizi.gr-u.it:80
+RUN export http_proxy=http://UGA05249:KD7UQL85,@proxybo.servizi.gr-u.it:80
+RUN export https_proxy=http://UGA05249:KD7UQL85,@proxybo.servizi.gr-u.it:80
+
+
 # Nominatim install
 ENV NOMINATIM_VERSION v.2.5.0
-RUN git clone --recursive git://github.com/twain47/Nominatim.git ./src
+RUN git clone -v --recursive https://github.com/twain47/Nominatim.git ./src
 RUN cd ./src && git checkout $NOMINATIM_VERSION && git submodule update --recursive --init && \
   ./autogen.sh && ./configure && make
 
+RUN pear config-set http_proxy $PROXY
 
 # Nominatim create site
 COPY local.php ./src/settings/local.php
@@ -40,8 +55,8 @@ RUN rm -rf /var/www/html/* && ./src/utils/setup.php --create-website /var/www/ht
 COPY nominatim.conf /etc/apache2/sites-enabled/000-default.conf
 
 # Load initial data
-ENV PBF_DATA http://download.geofabrik.de/europe/monaco-latest.osm.pbf
-RUN curl $PBF_DATA --create-dirs -o /app/src/data.osm.pbf
+COPY $OSM_PBF_FILE /app/src/data.osm.pbf
+# RUN curl $PBF_DATA --create-dirs -o /app/src/data.osm.pbf
 RUN service postgresql start && \
     sudo -u postgres psql postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='nominatim'" | grep -q 1 || sudo -u postgres createuser -s nominatim && \
     sudo -u postgres psql postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='www-data'" | grep -q 1 || sudo -u postgres createuser -SDR www-data && \
@@ -50,8 +65,37 @@ RUN service postgresql start && \
     sudo -u nominatim ./src/utils/setup.php --osm-file /app/src/data.osm.pbf --all --threads 2 && \
     service postgresql stop
 
+RUN unset http_proxy
+RUN unset https_proxy
+RUN unset HTTP_PROXY
+RUN unset HTTPS_PROXY
+
+
 EXPOSE 5432
 EXPOSE 8080
 
-COPY start.sh /app/start.sh
+# ADD configPostgresql.sh /app/configPostgresql.sh
+# RUN sed -i -e 's/\r$//' /app/configPostgresql.sh
+# RUN chmod +x /app/configPostgresql.sh
+#
+# COPY start.sh /app/start.sh
+# RUN sed -i -e 's/\r$//' /app/start.sh
+# RUN chmod +x /app/start.sh
+#
+# CMD /app/start.sh
+
+RUN apt-get -y update --fix-missing && \
+    apt-get install -y bc
+
+ADD configPostgresql.sh /app/configPostgresql.sh
+WORKDIR /app
+RUN chmod +x ./configPostgresql.sh
+ADD start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
+#RUN echo "Using OSM URL: "$OSM
+RUN sed -i -e 's/\r$//' /app/configPostgresql.sh
+#RUN ln -s /app/nominatim/website/search.php /var/www/nominatim/search.php
+#RUN ln -s /app/nominatim/website/reverse.php /var/www/nominatim/reverse.php
+RUN sed -i -e 's/\r$//' /app/start.sh
 CMD /app/start.sh
